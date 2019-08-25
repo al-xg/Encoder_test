@@ -7,9 +7,8 @@
 //#include <EEPROMStore.h>
 #include <Filter.h>
 
-// The plot we are sending data to.
-TimePlot MyPlot;
-
+TimePlot MyPlot;  // The plot we are sending data to.
+bool plot = 0;    // Turns on or off the PID plotting
 
 //Keyboard input///////////////////////////////////////////////////////////////////////////////////
 
@@ -17,10 +16,10 @@ TimePlot MyPlot;
 //https://arduining.com/2015/05/04/serial-control-of-arduino-led/
 //https://www.oreilly.com/library/view/arduino-cookbook/9781449399368/ch04.html (haven't actually read this one yet)
 
-char rxChar = 0;        // RXcHAR holds the received command.
-const byte numChars = 6;
+char rxChar = 0;                 // RXcHAR holds the received command.
+const byte numChars = 6;         // Number of characters to consider for a command
 char receivedChars[numChars];
-boolean newData = false;
+boolean newData = false;         // Flag to trigger updating variables once new chars received
 
 //Timing//////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,33 +28,33 @@ long interval = 50;             // Interval at which to update (milliseconds)
 
 //Functions////////////////////////////////////////////////////////////////////////////////////////
 
-void plotThings() {
-  unsigned long currentMillis = millis();
+void plotThings() {             // Reports to MegunoLINK at the defined time interval
+  if (plot == 1) {
 
-  if (currentMillis - previousMillis > interval) {
-    // save the last time you blinked the LED
-    previousMillis = currentMillis;
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis > interval) {
+      previousMillis = currentMillis;           // Save the last time this statement was entered
 
-    MyPlot.SendData("Setpoint", Setpoint);
-    MyPlot.SendData("Input", Input);
-    MyPlot.SendData("Output", Output);
-    //MyPlot.SendData("Power", power);
+      MyPlot.SendData("Setpoint", Setpoint);
+      MyPlot.SendData("Input", Input);
+      MyPlot.SendData("Output", Output);
 
-    /*Serial.print("   Setpoint: ");
-      Serial.print(Setpoint);
-      Serial.print("   Input: ");
-      Serial.print(Input);
-      Serial.print("   Output: ");
-      Serial.print(Output);
-      Serial.print("   Power: ");
-      Serial.println(power);*/
+      /*Serial.print("   Setpoint: ");
+        Serial.print(Setpoint);
+        Serial.print("   Input: ");
+        Serial.print(Input);
+        Serial.print("   Output: ");
+        Serial.print(Output);
+        Serial.print("   Power: ");
+        Serial.println(power);*/
+    }
   }
 }
 
-void SerialCommands() { //Function to read serial and determine cases
-  if (Serial.available() > 0) {        // Check receive buffer.
-    rxChar = Serial.read();            // Save character received.
-    Serial.flush();                    // Clear receive buffer.
+void GetSerialCommands() {                      // Function to read serial and determine cases
+  if (Serial.available() > 0) {                 // Check receive buffer.
+    rxChar = Serial.read();                     // Save character received.
+    Serial.flush();                             // Clear receive buffer.
 
     switch (rxChar) {
 
@@ -130,7 +129,7 @@ void SerialCommands() { //Function to read serial and determine cases
 
         Serial.print("'");
         Serial.print((char)rxChar);
-        Serial.println("' is not a command!");
+        Serial.println("' is not a valid command!");
     }
   }
 }
@@ -150,10 +149,10 @@ void recvWithEndMarker() {
       }
     }
     else {
-      receivedChars[ndx] = '\0'; // terminate the string
+      receivedChars[ndx] = '\0'; // Terminate the string
       ndx = 0;
       if (*receivedChars == '\0' || receivedChars == NULL) {
-        Serial.println("Empty command ignored ");
+        Serial.println("Empty command ignored.");
         newData = false;
       } else {
         newData = true;
@@ -165,10 +164,10 @@ void recvWithEndMarker() {
 void checkPositionChars() {
   if (newData == true) {
     AngleCommand = atol(receivedChars);
-    PositionCommand = AngleCommand*(EncToAngle/1000000);
+    PositionCommand = AngleCommand * (EncToAngle / 1000000);
     Serial.print("New angle command: ");
     Serial.print(AngleCommand);
-    Serial.println("degrees");
+    Serial.println(" deg");
     newData = false;
   }
 }
@@ -176,7 +175,7 @@ void checkPositionChars() {
 void checkKpChars() {
   if (newData == true) {
     Kp = atof(receivedChars);
-    myPID.SetTunings(Kp, Ki, Kd);
+    M1PID.SetTunings(Kp, Ki, Kd);
     Serial.print("New Kp value: ");
     Serial.println(Kp);
     newData = false;
@@ -186,7 +185,7 @@ void checkKpChars() {
 void checkKiChars() {
   if (newData == true) {
     Ki = atof(receivedChars);
-    myPID.SetTunings(Kp, Ki, Kd);
+    M1PID.SetTunings(Kp, Ki, Kd);
     Serial.print("New Ki value: ");
     Serial.println(Ki);
     newData = false;
@@ -196,15 +195,14 @@ void checkKiChars() {
 void checkKdChars() {
   if (newData == true) {
     Kd = atof(receivedChars);
-    myPID.SetTunings(Kp, Ki, Kd);
+    M1PID.SetTunings(Kp, Ki, Kd);
     Serial.print("New Kd value: ");
     Serial.println(Kd);
     newData = false;
   }
 }
 
-
-void printHelp(void) {   //Function to print the command list
+void printHelp(void) {   // Function to print the command list
   Serial.println();
   Serial.println("--- Command list: ---");
   Serial.println("? -> Print this HELP");
@@ -225,30 +223,6 @@ void printHelp(void) {   //Function to print the command list
   Serial.println(Kd);
   Serial.print("Angle Command: ");
   Serial.print(AngleCommand);
-  Serial.println("degrees");
+  Serial.println(" deg");
   Serial.println();
 }
-
-/*void checkReceivedChars() {
-  if (newData == true) {
-    if (*receivedChars == '\0' || receivedChars == NULL) {
-      Serial.println("Empty command ignored ");
-    } else {
-      long PowerSetting = atol(receivedChars);
-
-      if (PowerSetting < 0 || PowerSetting > 100) {
-        PowerSetting = constrain(PowerSetting, 0, 100);
-        power = map(PowerSetting, 0, 100, 0, 255);
-        Serial.print("Power constrained to: ");
-        Serial.print(PowerSetting);
-        Serial.println(" %");
-      } else {
-        power = map(PowerSetting, 0, 100, 0, 255);
-        Serial.print("Power set to: ");
-        Serial.print(PowerSetting);
-        Serial.println(" %");
-      }
-    }
-    newData = false;
-  }
-  }*/
