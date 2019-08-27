@@ -10,6 +10,7 @@
 TimePlot MyPlot;  // The plot we are sending data to.
 bool plot = 0;    // Turns on or off the PID plotting
 
+
 //Keyboard input///////////////////////////////////////////////////////////////////////////////////
 
 //https://forum.arduino.cc/index.php?topic=396450
@@ -38,6 +39,7 @@ void plotThings() {             // Reports to MegunoLINK at the defined time int
       MyPlot.SendData("Setpoint", Setpoint);
       MyPlot.SendData("Input", Input);
       MyPlot.SendData("Output", Output);
+      MyPlot.SendData("RampedPos", RampedPosition);
 
       /*Serial.print("   Setpoint: ");
         Serial.print(Setpoint);
@@ -62,23 +64,23 @@ void GetSerialCommands() {                      // Function to read serial and d
       case 'X':                                 // If received 'x' or 'X':
         if (StopStart == 0) {
           StopStart = 1;
-          Serial.println("Motor turned On.");
+          Serial.println("Motor turned on.");
         }
         else
         { StopStart = 0;
-          Serial.println("Motor turned Off.");
+          Serial.println("Motor turned off.");
         }
         break;
 
       case 'c':
       case 'C':                                  // If received  'c' or 'C':
-        if (dir == 1) {                          // Read dir status.
-          Serial.println("Direction: CCW");
-          dir = 0;
+        if (Decay == HIGH) {                        // Read Decay status.
+          Serial.println("Motor breaking off.");
+          Decay = LOW;
         }
         else {
-          Serial.println("Direction: CW");
-          dir = 1;
+          Serial.println("Motor breaking on.");
+          Decay = HIGH;
         }
         break;
 
@@ -102,6 +104,12 @@ void GetSerialCommands() {                      // Function to read serial and d
       case 'Q':                       // If received a 'q' or 'Q':
         recvWithEndMarker();          // Extract value
         checkPositionChars();         // Check the position value and update variable
+        break;
+
+      case 'z':
+      case 'Z':                       // If received a 'z' or 'Z':
+        recvWithEndMarker();          // Extract value
+        checkMotionDurationChars();   // Check the motion duration value and update variable
         break;
 
       case 'p':
@@ -163,12 +171,25 @@ void recvWithEndMarker() {
 
 void checkPositionChars() {
   if (newData == true) {
+    PrevPosition = PositionCommand;
     AngleCommand = atol(receivedChars);
     PositionCommand = AngleCommand * (EncToAngle / 1000000);
-    Serial.print("New angle command: ");
+    Serial.print("New Angle Command: ");
     Serial.print(AngleCommand);
     Serial.println(" deg");
     newData = false;
+    updateRamp = true;
+  }
+}
+
+void checkMotionDurationChars() {
+  if (newData == true) {
+    MotionDuration = atol(receivedChars);
+    Serial.print("New Motion Duration: ");
+    Serial.print(MotionDuration);
+    Serial.println(" ms");
+    newData = false;
+    updateRamp = true;
   }
 }
 
@@ -207,12 +228,13 @@ void printHelp(void) {   // Function to print the command list
   Serial.println("--- Command list: ---");
   Serial.println("? -> Print this HELP");
   Serial.println("x -> Toggle motor On/Off");
-  Serial.println("c -> Toggle CW/CCW");
+  Serial.println("c -> Toggle motor breaking On/Off");
   Serial.println("w -> Toggle PID plotting on/off");
   Serial.println("p'xxx' -> Set Kp");
   Serial.println("i'xxx' -> Set Ki");
   Serial.println("d'xxx' -> Set Kd");
   Serial.println("q'xxxxx' -> Set angle to move to in degrees");
+  Serial.println("z'xxxxx' -> Set duration of motion in milliseconds");
   Serial.println();
   Serial.println("--- Current Variables: ---");
   Serial.print("Kp=");
@@ -224,5 +246,8 @@ void printHelp(void) {   // Function to print the command list
   Serial.print("Angle Command: ");
   Serial.print(AngleCommand);
   Serial.println(" deg");
+  Serial.print("Motion Duration: ");
+  Serial.print(MotionDuration);
+  Serial.println(" ms");
   Serial.println();
 }
